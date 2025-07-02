@@ -1,0 +1,52 @@
+✅ Commit Message:
+feat: implement swap contract with liquidity pool and slippage protection
+
+📁 Updated Project Structure:
+/contracts
+  ├── TestToken.sol
+  └── SwapDEX.sol
+/scripts
+  ├── deploy.js
+  └── swapTest.js
+🔧 Smart Contract (SwapDEX.sol):
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+contract SwapDEX {
+    IERC20 public token;
+    uint256 public reserveETH;
+    uint256 public reserveToken;
+
+    event Swapped(address indexed user, uint256 ethIn, uint256 tokenOut);
+
+    constructor(address _token) {
+        token = IERC20(_token);
+    }
+
+    function addLiquidity(uint256 tokenAmount) external payable {
+        require(tokenAmount > 0 && msg.value > 0, "Invalid amounts");
+        token.transferFrom(msg.sender, address(this), tokenAmount);
+        reserveETH += msg.value;
+        reserveToken += tokenAmount;
+    }
+
+    function getPrice(uint256 inputAmount, bool isEthToToken) public view returns (uint256) {
+        if (isEthToToken) {
+            return (inputAmount * reserveToken) / (reserveETH + inputAmount);
+        } else {
+            return (inputAmount * reserveETH) / (reserveToken + inputAmount);
+        }
+    }
+
+    function swapEthToToken(uint256 minTokens) external payable {
+        require(msg.value > 0, "Send ETH to swap");
+        uint256 tokenOut = getPrice(msg.value, true);
+        require(tokenOut >= minTokens, "Slippage exceeded");
+        token.transfer(msg.sender, tokenOut);
+        reserveETH += msg.value;
+        reserveToken -= tokenOut;
+        emit Swapped(msg.sender, msg.value, tokenOut);
+    }
+}
